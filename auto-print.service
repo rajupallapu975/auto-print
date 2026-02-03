@@ -1,0 +1,23 @@
+[Unit]
+Description=Auto-Print Module for Raspberry Pi
+After=network.target cups.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/auto-print
+Environment="PATH=/home/pi/auto-print/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/home/pi/auto-print/venv/bin/python /home/pi/auto-print/main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

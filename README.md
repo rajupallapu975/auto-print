@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🖨️ Raspberry Pi Auto-Print Module
 
 Automated print job processing system that fetches orders from Firestore and prints them using CUPS on Linux/Raspberry Pi.
@@ -166,3 +167,6 @@ pip install --upgrade -r requirements.txt
 ## 📝 License
 
 [Your License Here]
+=======
+# auto-print
+>>>>>>> 2e397e4aa2d5968f6bc47b86e477a589f0dd91d0

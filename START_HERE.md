@@ -14,6 +14,7 @@ Your project now includes comprehensive Raspberry Pi support with the following 
 | **RASPBERRY_PI_SETUP.md** | Complete setup guide | Full deployment instructions |
 | **DEPLOYMENT_CHECKLIST.md** | Step-by-step checklist | During deployment |
 | **PI_QUICK_REFERENCE.md** | Command reference | Daily operations |
+| **KEYPAD_GUI_README.md** | GUI interface guide | Using with display/touchscreen |
 | **START_HERE.md** | This file | Getting started |
 
 ---
@@ -141,6 +142,8 @@ lp -d <printer-name> /usr/share/cups/data/testprint
 5. Test the application
 
 ### Daily Operation
+
+**Option 1: Terminal Mode (SSH/Headless)**
 ```bash
 # Start application
 cd ~/auto-print
@@ -150,6 +153,19 @@ python main.py
 # Or if using systemd service:
 sudo systemctl start auto-print
 ```
+
+**Option 2: GUI Mode (With Display/Touchscreen)**
+```bash
+# Start keypad GUI
+cd ~/auto-print
+source venv/bin/activate
+python keypad_gui.py
+
+# Or use the launcher:
+./start_keypad_gui.sh
+```
+
+> **💡 Tip**: Use GUI mode when you have a display connected to the Pi. Use terminal mode for headless/SSH operation.
 
 ### Maintenance
 ```bash

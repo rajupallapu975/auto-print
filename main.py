@@ -1,76 +1,107 @@
-from firebase_service import FirebaseService
-from backend_service import BackendService
-# from fake_printer import FakePrinter  # For testing only
-# from real_printer import RealPrinter  # For Linux only
-from smart_printer import SmartPrinter  # Works on Windows & Linux
+import tkinter as tk
+import sys
+import os
 
-def main():
-    print("\n--- RASPBERRY PI AUTO-PRINT MODULE ---")
+# Add the current directory to path for imports to work across folders
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-    # 🔗 Backend base URL (index.js)
-    BACKEND_BASE_URL = "http://localhost:5000"
-    
-    # 🖨️ Printer Configuration
-    # Find your printer name with: lpstat -p -d
-    # Leave as None to use default printer
-    PRINTER_NAME = None  # Example: "HP_LaserJet_Pro"
+from hardware.serial_reader import ArduinoSerialReader
+from gui.app_interface import AutoPrintUI
+from services.firebase_service import FirebaseService
+from services.backend_service import BackendService
+from services.smart_printer import SmartPrinter
 
-    # Initialize services
-    fb_service = FirebaseService()
-    backend = BackendService(base_url=BACKEND_BASE_URL)
-    printer = SmartPrinter(printer_name=PRINTER_NAME)
-    
-    # Check printer before starting
-    is_available, message = printer.check_printer_available()
-    if not is_available:
-        print(f"\n⚠️ WARNING: {message}")
-        response = input("Continue anyway? (yes/no): ").strip().lower()
-        if response not in ['yes', 'y']:
-            print("👋 Exiting. Please connect a printer and try again.")
-            return
-        print("⚠️ Proceeding without printer verification...\n")
-
-    while True:
-        print("\n" + "-" * 40)
-        pickup_code = input("⌨️  Enter Pickup Code (or 'exit' to quit): ").strip()
-
-        if pickup_code.lower() == "exit":
-            print("👋 Exiting auto-print module")
-            break
-
-        # 1️⃣ Get order using pickup code (Firestore)
-        order_data = fb_service.get_order_by_pickup_code(pickup_code)
-        if not order_data:
-            continue
-
-        # 2️⃣ Download files using Order ID (Node backend)
-        downloaded_items = backend.download_files(order_data)
-        if not downloaded_items:
-            print("❌ No files downloaded. Aborting print.")
-            continue
-
-        # 3️⃣ Print files with actual settings
-        print(f"\n📑 Preparing {len(downloaded_items)} files for printing...\n")
+class AutoPrintMain:
+    def __init__(self):
+        self.root = tk.Tk()
         
-        # Get global settings from order
-        print_settings = order_data.get('printSettings', {})
-        global_duplex = print_settings.get('doubleSide', False)
+        # Initialize Backend Services
+        self.fb_service = FirebaseService()
+        self.backend = BackendService(base_url="http://localhost:5000")
+        self.printer = SmartPrinter(printer_name=None)
+        
+        # Initialize GUI
+        self.ui = AutoPrintUI(self.root, on_code_complete=self.process_verification)
+        
+        # Initialize Hardware Input: Always use Serial (Arduino)
+        # On Windows, we specify COM19. On Linux/Pi, it auto-detects (e.g. /dev/ttyACM0)
+        arduino_port = "COM19" if sys.platform.startswith('win') else None
+        self.reader = ArduinoSerialReader(port=arduino_port, callback=self.handle_keypad_input)
 
-        for item in downloaded_items:
-            file_path = item["path"]
-            file_settings = item.get("settings", {})
+    def handle_keypad_input(self, char):
+        """Bridge between Hardware and GUI. Maps letters to numbers if needed."""
+        print(f"⌨️ Keypad received: {char}")
+        
+        # Mapping Logic
+        mapping = {
+            'B': '1',
+            'C': '2',
+            'D': '3',
+            'A': '0'  # You can change A to whatever you want
+        }
+        
+        # If the character is one of our special letters, convert it
+        final_char = mapping.get(char, char)
+        
+        # Use root.after to safely update the UI from the serial thread
+        self.root.after(0, self.ui.handle_key_input, final_char)
+
+    def process_verification(self, code):
+        """The core logic that runs when 6 digits are entered."""
+        try:
+            # 1. Fetch from Firestore
+            order_data = self.fb_service.get_order_by_pickup_code(code)
             
-            # Combine global and per-file settings
-            final_settings = {
-                "copies": file_settings.get('copies', 1),
-                "color": file_settings.get('color', 'BW'),
-                "duplex": global_duplex,
-                "orientation": file_settings.get('orientation', 'PORTRAIT'),
-            }
+            if not order_data:
+                self.root.after(0, self.ui.show_error, "No matching files found")
+                return
 
-            printer.print_job([item], final_settings)
+            # 2. Download from Backend
+            self.root.after(0, self.ui.show_success, "Code Verified! Preparing files...")
+            downloaded_items = self.backend.download_files(order_data)
+            
+            if not downloaded_items:
+                self.root.after(0, self.ui.show_error, "Error downloading files")
+                return
 
-        print("✅ PRINT JOBS COMPLETED")
+            # 3. Print Files
+            print_settings = order_data.get('printSettings', {})
+            global_duplex = print_settings.get('doubleSide', False)
+            total_files = len(downloaded_items)
+
+            for i, item in enumerate(downloaded_items):
+                # Update UI status
+                self.root.after(0, self.ui.update_printing_status, i+1, total_files)
+                
+                final_settings = {
+                    "copies": item.get('settings', {}).get('copies', 1),
+                    "color": item.get('settings', {}).get('color', 'BW'),
+                    "duplex": global_duplex,
+                    "orientation": item.get('settings', {}).get('orientation', 'PORTRAIT'),
+                }
+                
+                # Perform the print
+                self.printer.print_job([item], final_settings)
+
+            self.root.after(0, self.ui.show_success, "Printing Complete!")
+            time_to_wait = 5000 # 5 seconds
+            self.root.after(time_to_wait, self.ui.reset_ui, "Ready for next customer")
+
+        except Exception as e:
+            print(f"❌ Main Process Error: {e}")
+            self.root.after(0, self.ui.show_error, f"System Error: {str(e)}")
+
+    def run(self):
+        # Start hardware listener
+        if self.reader.start():
+            print("🚀 System Online. Waiting for input...")
+            self.root.mainloop()
+        else:
+            print("❌ Failed to start serial reader. Is Arduino connected?")
+            # We still show the UI, but maybe with a warning
+            self.ui.show_error("Arduino Disconnected")
+            self.root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    app = AutoPrintMain()
+    app.run()

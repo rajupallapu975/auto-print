@@ -7,7 +7,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from hardware.serial_reader import ArduinoSerialReader
 from gui.app_interface import AutoPrintUI
-from services.firebase_service import FirebaseService
+# from services.firebase_service import FirebaseService
 from services.backend_service import BackendService
 from services.smart_printer import SmartPrinter
 
@@ -15,8 +15,7 @@ class AutoPrintMain:
     def __init__(self):
         self.root = tk.Tk()
         
-        # Initialize Backend Services
-        self.fb_service = FirebaseService()
+        # self.fb_service = FirebaseService() # Removed for Supabase/Backend migration
         
         # 🔗 Backend API URL
         # IMPORTANT: Change 'localhost' to your Laptop's IP (e.g., "http://192.168.1.10:5000")
@@ -54,27 +53,29 @@ class AutoPrintMain:
     def process_verification(self, code):
         """The core logic that runs when 6 digits are entered."""
         try:
-            # 1. Fetch from Firestore
-            order_data = self.fb_service.get_order_by_pickup_code(code)
+            # 1. Ask Backend to verify in Supabase
+            verify_res = self.backend.verify_code(code)
             
-            if not order_data:
-                self.root.after(0, self.ui.show_error, "No matching files found")
+            if not verify_res.get("success"):
+                error_msg = verify_res.get("error", "Invalid code")
+                if error_msg == "IP_ERROR":
+                    self.root.after(0, self.ui.show_error, "Backend IP Error: Check Connection")
+                else:
+                    self.root.after(0, self.ui.show_error, "Invalid or Expired Code")
                 return
 
-            # 2. Download from Backend
-            self.root.after(0, self.ui.show_success, "Code Verified! Preparing files...")
-            downloaded_items = self.backend.download_files(order_data)
+            order_id = verify_res.get("orderId")
             
-            if downloaded_items == "IP_ERROR":
-                self.root.after(0, self.ui.show_error, "Backend IP Error: Check Connection")
-                return
-                
+            # 2. Download files using URLs from Backend
+            self.root.after(0, self.ui.show_success, "Code Verified! Preparing files...")
+            downloaded_items = self.backend.download_files(verify_res)
+            
             if not downloaded_items:
                 self.root.after(0, self.ui.show_error, "Error downloading files")
                 return
 
             # 3. Print Files
-            print_settings = order_data.get('printSettings', {})
+            print_settings = verify_res.get('printSettings', {})
             global_duplex = print_settings.get('doubleSide', False)
             total_files = len(downloaded_items)
 
@@ -91,6 +92,9 @@ class AutoPrintMain:
                 
                 # Perform the print
                 self.printer.print_job([item], final_settings)
+            
+            # 4. Notify Backend to Revoke Code in Supabase
+            self.backend.mark_as_printed(order_id)
 
             self.root.after(0, self.ui.show_success, "Printing Complete!")
             time_to_wait = 5000 # 5 seconds

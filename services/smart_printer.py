@@ -182,7 +182,19 @@ class SmartPrinter:
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.returncode == 0:
-                print(f"✅ Job ID: {result.stdout.strip()}")
+                # Extract Job ID (e.g., "request id is HL-L2350DW-123 (1 file(s))")
+                output = result.stdout.strip()
+                print(f"✅ Job Sent: {output}")
+                
+                # Extract job id if possible
+                job_id = None
+                if "is" in output and "(" in output:
+                    job_id = output.split("is ")[1].split(" (")[0]
+                
+                # WAIT UNTIL PRINTED (Optional but requested)
+                if job_id:
+                    self.wait_for_job_completion(job_id)
+                
                 return True
             else:
                 print(f"❌ CUPS error: {result.stderr}")
@@ -191,3 +203,17 @@ class SmartPrinter:
         except Exception as e:
             print(f"❌ Linux print error: {e}")
             return False
+
+    def wait_for_job_completion(self, job_id):
+        """Polls CUPS until the job is no longer in the active queue."""
+        import time
+        print(f"⏳ Waiting for printer to finish job: {job_id}...")
+        
+        while True:
+            # lpstat -W not-completed shows current jobs
+            res = subprocess.run(["lpstat", "-W", "not-completed"], capture_output=True, text=True)
+            if job_id not in res.stdout:
+                # Job is no longer in 'not-completed' list
+                print(f"✨ Job {job_id} finished printing!")
+                break
+            time.sleep(2) # Poll every 2 seconds

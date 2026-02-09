@@ -21,10 +21,13 @@ class BackendService:
         print(f"🔎 Querying files: {list_url}")
 
         try:
-            res = requests.get(list_url)
+            res = requests.get(list_url, timeout=5)
             res.raise_for_status()
             files = res.json().get("files", [])
             print(f"📄 Backend reported files: {files}")
+        except requests.exceptions.ConnectionError:
+            print(f"❌ Backend IP Error: Could not connect to {self.base_url}. Check if LAPTOP_IP is correct.")
+            return "IP_ERROR"
         except Exception as e:
             print(f"❌ Backend error: {e}")
             return []
@@ -43,7 +46,7 @@ class BackendService:
 
             try:
                 print(f"⬇️ Downloading: {url}")
-                r = requests.get(url, stream=True)
+                r = requests.get(url, stream=True, timeout=10)
                 r.raise_for_status()
                 
                 content = r.content

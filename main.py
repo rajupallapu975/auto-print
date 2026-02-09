@@ -17,7 +17,12 @@ class AutoPrintMain:
         
         # Initialize Backend Services
         self.fb_service = FirebaseService()
-        self.backend = BackendService(base_url="http://localhost:5000")
+        
+        # 🔗 Backend API URL
+        # IMPORTANT: Change 'localhost' to your Laptop's IP (e.g., "http://192.168.1.10:5000")
+        # when running on the Raspberry Pi!
+        LAPTOP_IP = "localhost" 
+        self.backend = BackendService(base_url=f"http://{LAPTOP_IP}:5000")
         self.printer = SmartPrinter(printer_name=None)
         
         # Initialize GUI
@@ -60,6 +65,10 @@ class AutoPrintMain:
             self.root.after(0, self.ui.show_success, "Code Verified! Preparing files...")
             downloaded_items = self.backend.download_files(order_data)
             
+            if downloaded_items == "IP_ERROR":
+                self.root.after(0, self.ui.show_error, "Backend IP Error: Check Connection")
+                return
+                
             if not downloaded_items:
                 self.root.after(0, self.ui.show_error, "Error downloading files")
                 return

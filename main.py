@@ -21,7 +21,7 @@ class AutoPrintMain:
         # 🔗 Backend API URL
         # IMPORTANT: Change 'localhost' to your Laptop's IP (e.g., "http://192.168.1.10:5000")
         # when running on the Raspberry Pi!
-        LAPTOP_IP = "localhost" 
+        LAPTOP_IP = "10.71.181.155" 
         self.backend = BackendService(base_url=f"http://{LAPTOP_IP}:5000")
         self.printer = SmartPrinter(printer_name=None)
         

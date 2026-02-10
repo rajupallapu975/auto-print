@@ -51,9 +51,9 @@ class AutoPrintMain:
         self.root.after(0, self.ui.handle_key_input, final_char)
 
     def process_verification(self, code):
-        """The core logic that runs when 6 digits are entered."""
+        """The core logic that runs when 4 digits are entered."""
         try:
-            # 1. Ask Backend to verify in Supabase
+            # 1. Ask Backend to verify in Firebase (Cloudinary Flow)
             verify_res = self.backend.verify_code(code)
             
             if not verify_res.get("success"):
@@ -93,7 +93,7 @@ class AutoPrintMain:
                 # Perform the print
                 self.printer.print_job([item], final_settings)
             
-            # 4. Notify Backend to Revoke Code in Supabase
+            # 4. Notify Backend to Revoke Code in Firebase
             self.backend.mark_as_printed(order_id)
 
             self.root.after(0, self.ui.show_success, "Printing Complete!")

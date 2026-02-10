@@ -12,15 +12,16 @@ class BackendService:
 
     def verify_code(self, pickup_code):
         """
-        New method: Asks the Backend to verify the code in Supabase.
+        Asks the Backend to verify the code in Firebase.
         Returns the data which includes file URLs and print settings.
         """
         url = f"{self.base_url}/verify-pickup-code"
         print(f"📡 Verifying code at: {url}")
         try:
-            res = requests.post(url, json={"pickupCode": pickup_code}, timeout=10)
+            headers = {"x-printer-key": "LOCAL_PRINTER"}
+            res = requests.post(url, json={"pickupCode": pickup_code}, headers=headers, timeout=10)
             res.raise_for_status()
-            return res.json() # Returns {'success': True, 'orderId': '...', 'files': [...]}
+            return res.json()
         except requests.exceptions.ConnectionError:
             print("❌ Connection Error: Backend server is not reachable.")
             return {"success": False, "error": "IP_ERROR"}
@@ -34,10 +35,11 @@ class BackendService:
         using the direct Supabase URLs provided.
         """
         order_id = verified_data.get("orderId")
-        files_list = verified_data.get("files", []) # list of {'name': '...', 'url': '...'}
+        # Backend now returns 'fileUrls' (Cloudinary links)
+        file_urls = verified_data.get("fileUrls", []) 
         print_settings = verified_data.get("printSettings", {})
         
-        if not order_id or not files_list:
+        if not order_id or not file_urls:
             print("❌ No files or Order ID found in verification data")
             return []
 
@@ -48,17 +50,18 @@ class BackendService:
         # Get individual file settings if they exist in metadata
         files_metadata = print_settings.get('files', [])
 
-        for idx, file_info in enumerate(files_list):
-            filename = file_info.get("name")
-            download_url = file_info.get("url")
+        for idx, url in enumerate(file_urls):
+            # Extract filename from Cloudinary URL or index
+            filename = url.split('/')[-1].split('?')[0]
+            if not filename.endswith(('.pdf', '.jpg', '.png', '.jpeg')):
+                filename = f"file_{idx+1}.pdf"
             
-            # Save locally as PDF
             local_name = f"{idx}.pdf"
             local_path = os.path.join(job_dir, local_name)
 
             try:
                 print(f"⬇️ Downloading: {filename}")
-                r = requests.get(download_url, stream=True, timeout=15)
+                r = requests.get(url, stream=True, timeout=15)
                 r.raise_for_status()
                 
                 content = r.content
@@ -92,7 +95,8 @@ class BackendService:
         """
         url = f"{self.base_url}/mark-printed"
         try:
-            requests.post(url, json={"orderId": order_id}, timeout=5)
-            print(f"✅ Order {order_id} marked as printed in Supabase")
+            headers = {"x-printer-key": "LOCAL_PRINTER"}
+            requests.post(url, json={"orderId": order_id}, headers=headers, timeout=5)
+            print(f"✅ Order {order_id} marked as printed in Firebase")
         except:
             print(f"⚠️ Warning: Could not notify backend that order was printed")

@@ -6,7 +6,7 @@ import time
 class AutoPrintUI:
     def __init__(self, root, on_code_complete):
         self.root = root
-        self.on_code_complete = on_code_complete # Logic to run after 6 digits
+        self.on_code_complete = on_code_complete # Logic to run after 4 digits
         self.code = ""
         
         # Setup Window
@@ -37,13 +37,13 @@ class AutoPrintUI:
                                      highlightbackground="#38bdf8", highlightthickness=2)
         self.display_frame.pack(pady=40)
 
-        # The 6 Slots for the code
-        self.code_label = tk.Label(self.display_frame, text="_ _ _ _ _ _", font=self.code_font, 
+        # The 4 Slots for the code
+        self.code_label = tk.Label(self.display_frame, text="_ _ _ _", font=self.code_font, 
                                   fg="#f8fafc", bg="#1e293b")
         self.code_label.pack()
 
         # Instruction / Status Label
-        self.status_label = tk.Label(self.main_frame, text="Please enter your 6-digit Pickup Code", 
+        self.status_label = tk.Label(self.main_frame, text="Please enter your 4-digit Pickup Code", 
                                     font=self.instruction_font, fg="#94a3b8", bg="#0f172a")
         self.status_label.pack(pady=10)
 
@@ -77,24 +77,24 @@ class AutoPrintUI:
         
         if char == "CLEAR":
             self.code = ""
-            self.show_normal("Cleared. Please enter your 6-digit code")
+            self.show_normal("Cleared. Please enter your 4-digit code")
         elif char == "BACKSPACE":
             if len(self.code) > 0:
                 self.code = self.code[:-1]
-                self.show_normal("Please enter your 6-digit Pickup Code")
-        elif len(self.code) < 6:
+            self.show_normal("Please enter your 4-digit Pickup Code")
+        elif len(self.code) < 4:
             self.code += char
             
         self.update_code_display()
 
-        # AUTO VERIFY AT 6 DIGITS
-        if len(self.code) == 6:
+        # AUTO VERIFY AT 4 DIGITS
+        if len(self.code) == 4:
             self.start_verification()
 
     def update_code_display(self):
         # Format code with underscores for empty slots
         display_text = ""
-        for i in range(6):
+        for i in range(4):
             if i < len(self.code):
                 display_text += self.code[i] + " "
             else:
@@ -107,7 +107,7 @@ class AutoPrintUI:
         self.display_frame.config(highlightbackground="#38bdf8")
 
     def start_verification(self):
-        """Called when exactly 6 digits are entered."""
+        """Called when exactly 4 digits are entered."""
         self.status_label.config(text="Verifying code...", fg="#38bdf8")
         self.detail_label.config(text="Checking database...", fg="#fbbf24")
         self.display_frame.config(highlightbackground="#fbbf24")

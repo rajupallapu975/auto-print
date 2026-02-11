@@ -2,6 +2,9 @@ import platform
 import subprocess
 import os
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class SmartPrinter:
@@ -34,9 +37,11 @@ class SmartPrinter:
                 if result.stdout.strip():
                     return True, result.stdout.strip()
 
+                logger.warning("No default printer found on Windows")
                 return False, "No default printer"
 
             except Exception as e:
+                logger.error(f"Windows printer check failed: {e}")
                 return False, str(e)
 
         elif self.os_type == "Linux":
@@ -51,9 +56,11 @@ class SmartPrinter:
                 if result.returncode == 0 and "printer" in result.stdout.lower():
                     return True, "CUPS printer detected"
 
+                logger.warning("No CUPS printer found on Linux")
                 return False, "No CUPS printer found"
 
             except Exception as e:
+                logger.error(f"Linux printer check failed: {e}")
                 return False, str(e)
 
         return False, "Unsupported OS"
@@ -157,9 +164,11 @@ class SmartPrinter:
             )
 
             if result.returncode != 0:
+                logger.error(f"CUPS error: {result.stderr}")
                 print(f"❌ CUPS error: {result.stderr}")
                 return False
 
+            logger.info(f"Print job submitted: {result.stdout.strip()}")
             print(f"✅ CUPS Job: {result.stdout.strip()}")
 
             job_id = self._extract_job_id(result.stdout)

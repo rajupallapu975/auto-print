@@ -4,6 +4,16 @@ import os
 import time
 import threading
 
+import logging
+
+# Setup Logging
+logging.basicConfig(
+    filename='autoprint.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -77,6 +87,7 @@ class AutoPrintMain:
             if not verify_res.get("success"):
                 error_msg = verify_res.get("error", "Invalid code")
 
+                logger.warning(f"Verification failed for code {code}: {error_msg}")
                 if error_msg == "IP_ERROR":
                     self.root.after(
                         0,
@@ -92,6 +103,7 @@ class AutoPrintMain:
                 return
 
             order_id = verify_res.get("orderId")
+            logger.info(f"Verified order: {order_id}")
 
             if not order_id:
                 self.root.after(
@@ -108,15 +120,32 @@ class AutoPrintMain:
                 "Code Verified! Preparing files..."
             )
 
-            downloaded_items = self.backend.download_files(verify_res)
+            download_res = self.backend.download_files(verify_res)
 
-            if not downloaded_items:
+            if not download_res.get("success", False):
+                error_type = download_res.get("error", "DOWNLOAD_ERROR")
+                logger.error(f"Download failed for order {order_id}: {error_type}")
+                
+                error_display = "File Download Failed"
+                if error_type == "CLOUDINARY_ERROR":
+                    error_display = "Cloudinary Fetch Error"
+                
                 self.root.after(
                     0,
                     self.ui.show_error,
-                    "File Download Failed"
+                    error_display
+                )
+                
+                # Optional: log issue to backend
+                self.backend.report_issue(
+                    order_id, 
+                    error_type, 
+                    str(download_res.get("details", "No details"))
                 )
                 return
+
+            downloaded_items = download_res.get("files", [])
+            logger.info(f"Downloaded {len(downloaded_items)} files for order {order_id}")
 
             # 3️⃣ Print Files
             print_settings = verify_res.get("printSettings", {})
@@ -156,6 +185,7 @@ class AutoPrintMain:
             )
 
         except Exception as e:
+            logger.exception(f"Critical system error: {e}")
             print(f"❌ System Error: {e}")
             self.root.after(
                 0,

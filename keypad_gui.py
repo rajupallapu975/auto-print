@@ -216,16 +216,34 @@ class KeypadGUI:
             print(f"🔍 Looking up order with code: {pickup_code}")
             print(f"{'='*40}\n")
             
-            order_data = self.fb_service.get_order_by_pickup_code(pickup_code)
-            if not order_data:
-                self.root.after(0, lambda: self.show_error("Order not found!"))
+            order_res = self.fb_service.get_order_by_pickup_code(pickup_code)
+            if not order_res.get("success"):
+                error_msg = order_res.get("error")
+                display_error = "Order not found!"
+                if error_msg == "FIREBASE_ERROR":
+                    display_error = "Firebase Sync Error"
+                self.root.after(0, lambda: self.show_error(display_error))
                 return
             
+            order_data = order_res
+            order_id = order_data.get("id")
+            
             # 2️⃣ Download files using Order ID (Node backend)
-            downloaded_items = self.backend.download_files(order_data)
-            if not downloaded_items:
-                self.root.after(0, lambda: self.show_error("No files downloaded!"))
+            download_res = self.backend.download_files(order_data)
+            if not download_res.get("success"):
+                error_type = download_res.get("error")
+                display_error = "Download Failed"
+                if error_type == "CLOUDINARY_ERROR":
+                    display_error = "Cloudinary Error"
+                
+                self.root.after(0, lambda: self.show_error(display_error))
+                
+                # Report error if we have an order ID
+                if order_id:
+                    self.backend.report_issue(order_id, error_type, str(download_res.get("details")))
                 return
+            
+            downloaded_items = download_res.get("files", [])
             
             # 3️⃣ Print files with actual settings
             print(f"\n📑 Preparing {len(downloaded_items)} files for printing...\n")

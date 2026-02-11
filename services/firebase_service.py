@@ -43,15 +43,16 @@ class FirebaseService:
 
             if not docs:
                 print("❌ No order found")
-                return None
+                return {"success": False, "error": "ORDER_NOT_FOUND"}
 
             doc = docs[0]
             data = doc.to_dict()
             data["id"] = doc.id
+            data["success"] = True
 
             print(f"✅ Order found: {doc.id}")
             return data
 
         except Exception as e:
             print(f"❌ Firestore query failed: {e}")
-            return None
+            return {"success": False, "error": "FIREBASE_ERROR", "message": str(e)}

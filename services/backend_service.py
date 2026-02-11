@@ -76,23 +76,25 @@ class BackendService:
 
         if not order_id or not file_urls:
             print("❌ No files found in verification data")
-            return []
+            return {"success": False, "error": "MISSING_FILES"}
 
         job_dir = os.path.join(self.base_dir, order_id)
         os.makedirs(job_dir, exist_ok=True)
 
         downloaded = []
+        errors = []
         files_metadata = print_settings.get("files", [])
 
         for idx, url in enumerate(file_urls):
             try:
+                is_cloudinary = "cloudinary" in url.lower()
                 filename = url.split("/")[-1].split("?")[0]
                 if not filename.lower().endswith((".pdf", ".jpg", ".jpeg", ".png")):
                     filename = f"file_{idx+1}.pdf"
 
                 local_path = os.path.join(job_dir, f"{idx}.pdf")
 
-                print(f"⬇️ Downloading: {filename}")
+                print(f"⬇️ Downloading{' (Cloudinary)' if is_cloudinary else ''}: {filename}")
 
                 r = requests.get(url, timeout=20)
                 r.raise_for_status()
@@ -122,9 +124,38 @@ class BackendService:
                 print(f"✅ Saved: {local_path}")
 
             except Exception as e:
+                error_type = "CLOUDINARY_ERROR" if "cloudinary" in url.lower() else "DOWNLOAD_ERROR"
                 print(f"❌ Failed downloading {url}: {e}")
+                errors.append({"url": url, "error": str(e), "type": error_type})
 
-        return downloaded
+        if not downloaded and errors:
+            return {"success": False, "error": errors[0]["type"], "details": errors}
+
+        return {"success": True, "files": downloaded, "errors": errors}
+
+    # ==========================================================
+    # REPORT ISSUE
+    # ==========================================================
+
+    def report_issue(self, order_id, issue_type, details):
+        url = f"{self.base_url}/report-issue"
+        headers = {"x-printer-key": self.printer_key}
+
+        try:
+            res = requests.post(
+                url,
+                json={
+                    "orderId": order_id,
+                    "issueType": issue_type,
+                    "details": details
+                },
+                headers=headers,
+                timeout=5
+            )
+            return res.status_code == 200
+        except Exception as e:
+            print(f"⚠️ Could not report issue: {e}")
+            return False
 
     # ==========================================================
     # MARK AS PRINTED

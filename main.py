@@ -21,7 +21,7 @@ class AutoPrintMain:
         # IMPORTANT: Change 'localhost' to your Laptop's IP (e.g., "http://192.168.1.10:5000")
         # when running on the Raspberry Pi!
         LAPTOP_IP = "10.71.181.155" 
-        self.backend = BackendService(base_url=f"http://{LAPTOP_IP}:5000")
+        self.backend = BackendService(base_url=f"https://printer-backend-ch2e.onrender.com")
         self.printer = SmartPrinter(printer_name=None)
         
         # Initialize GUI
@@ -51,7 +51,7 @@ class AutoPrintMain:
         self.root.after(0, self.ui.handle_key_input, final_char)
 
     def process_verification(self, code):
-        """The core logic that runs when 4 digits are entered."""
+        """The core logic that runs when 6 digits are entered."""
         try:
             # 1. Ask Backend to verify in Firebase (Cloudinary Flow)
             verify_res = self.backend.verify_code(code)

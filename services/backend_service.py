@@ -76,7 +76,9 @@ class BackendService:
                     print(f"⚠️ Backend rejected code: {backend_msg}")
                     return {"success": False, "error": backend_msg}
 
-                print(f"✅ Code verified: Order {data.get('orderId')}")
+                # Success!
+                print(f"✅ Backend reached successfully.")
+                print(f"✅ Order {data.get('orderId')} status: READY TO PRINT")
                 return data
 
             except requests.exceptions.Timeout:

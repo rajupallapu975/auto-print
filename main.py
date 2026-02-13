@@ -1,12 +1,13 @@
 import tkinter as tk
 import sys
 import os
-import time
 import threading
-
 import logging
 
-# Setup Logging
+# ============================================================
+# LOGGING SETUP
+# ============================================================
+
 logging.basicConfig(
     filename='autoprint.log',
     level=logging.INFO,
@@ -26,21 +27,23 @@ from services.smart_printer import SmartPrinter
 class AutoPrintMain:
     def __init__(self):
         self.root = tk.Tk()
-       #Raju
-        # 🔗 Backend API URL (Render Production URL)
+        self.root.title("Auto Print System")
+
+        # Backend API
         self.backend = BackendService(
             base_url="https://printer-backend-ch2e.onrender.com"
         )
 
+        # Printer
         self.printer = SmartPrinter(printer_name=None)
 
-        # Initialize GUI
+        # GUI
         self.ui = AutoPrintUI(
             self.root,
             on_code_complete=self.process_verification
         )
 
-        # Hardware (Windows → COM19 | Raspberry Pi → auto-detect)
+        # Arduino Port
         arduino_port = "COM19" if sys.platform.startswith('win') else None
         self.reader = ArduinoSerialReader(
             port=arduino_port,
@@ -52,8 +55,6 @@ class AutoPrintMain:
     # ============================================================
 
     def handle_keypad_input(self, char):
-        print(f"⌨️ Keypad received: {char}")
-
         mapping = {
             'B': '1',
             'C': '2',
@@ -62,12 +63,10 @@ class AutoPrintMain:
         }
 
         final_char = mapping.get(char, char)
-
-        # Safe UI update from thread
         self.root.after(0, self.ui.handle_key_input, final_char)
 
     # ============================================================
-    # PROCESS VERIFICATION (Threaded to prevent UI freeze)
+    # PROCESS VERIFICATION (THREAD SAFE)
     # ============================================================
 
     def process_verification(self, code):
@@ -79,92 +78,82 @@ class AutoPrintMain:
 
     def _process_verification_thread(self, code):
         try:
+            logger.info(f"Verifying code: {code}")
             print(f"🔎 Verifying code: {code}")
 
-            # 1️⃣ Verify with Backend
+            # 1️⃣ VERIFY CODE
             verify_res = self.backend.verify_code(code)
 
-            if not verify_res.get("success"):
-                error_msg = verify_res.get("error", "Invalid code")
-                logger.warning(f"Verification failed for code {code}: {error_msg}")
-                
-                # Show specific error or generic one
-                display_msg = "Invalid or Expired Code"
-                if error_msg == "IP_ERROR":
-                    display_msg = "Backend Offline"
-                elif error_msg == "TIMEOUT":
-                    display_msg = "Connection Timeout"
-                elif "Unknown error" not in error_msg and len(error_msg) < 30:
-                    display_msg = error_msg # Show backend's specific rejection reason
-
-                self.root.after(0, self.ui.show_error, display_msg)
+            if not verify_res or not verify_res.get("success"):
+                error_msg = verify_res.get("error", "Invalid Code") if verify_res else "Backend Error"
+                logger.warning(f"Verification failed: {error_msg}")
+                self.root.after(0, self.ui.show_error, "Invalid or Expired Code")
                 return
 
             order_id = verify_res.get("orderId")
-            logger.info(f"Verified order: {order_id}")
-
             if not order_id:
-                self.root.after(
-                    0,
-                    self.ui.show_error,
-                    "Invalid Order ID"
-                )
+                logger.error("Order ID missing in verification response")
+                self.root.after(0, self.ui.show_error, "Invalid Order ID")
                 return
 
-            # 2️⃣ Download Files
             self.root.after(
                 0,
                 self.ui.show_success,
                 "Code Verified! Preparing files..."
             )
 
+            # 2️⃣ DOWNLOAD FILES
+            logger.info("Downloading files...")
             download_res = self.backend.download_files(verify_res)
 
-            if not download_res.get("success", False):
-                error_type = download_res.get("error", "DOWNLOAD_ERROR")
-                logger.error(f"Download failed for order {order_id}: {error_type}")
-                
-                error_display = "File Download Failed"
-                if error_type == "CLOUDINARY_ERROR":
-                    error_display = "Cloudinary Fetch Error"
-                
-                self.root.after(
-                    0,
-                    self.ui.show_error,
-                    error_display
-                )
-                
-                # Optional: log issue to backend
-                self.backend.report_issue(
-                    order_id, 
-                    error_type, 
-                    str(download_res.get("details", "No details"))
-                )
+            if not download_res or not download_res.get("success"):
+                logger.error("Download failed")
+                self.root.after(0, self.ui.show_error, "Download Failed")
                 return
 
-            downloaded_items = download_res.get("files", [])
-            logger.info(f"Downloaded {len(downloaded_items)} files for order {order_id}")
+            files = download_res.get("files", [])
+            if not files:
+                logger.error("No files returned from backend")
+                self.root.after(0, self.ui.show_error, "No Files Found")
+                return
 
-            # 3️⃣ Print Files
+            logger.info(f"{len(files)} files downloaded")
+
+            # 3️⃣ CHECK PRINTER
+            printer_status, printer_msg = self.printer.check_printer_available()
+
+            if not printer_status:
+                logger.error(f"Printer error: {printer_msg}")
+                self.root.after(0, self.ui.show_error, "Printer Not Found")
+                return
+
+            logger.info(f"Printer ready: {printer_msg}")
+
+            # 4️⃣ PRINT FILES
+            self.root.after(
+                0,
+                self.ui.show_status,
+                f"Printing {len(files)} files..."
+            )
+
             print_settings = verify_res.get("printSettings", {})
-            global_duplex = print_settings.get("doubleSide", False)
+            duplex = print_settings.get("doubleSide", False)
 
-            # Inform UI
-            self.root.after(0, self.ui.update_printing_status, 1, len(downloaded_items))
-
-            # Submit all files as one job to let SmartPrinter handle it efficiently
             print_success = self.printer.print_job(
-                downloaded_items, 
-                {"duplex": global_duplex}
+                files,
+                {"duplex": duplex}
             )
 
             if not print_success:
-                logger.error(f"Printing failed for order {order_id}")
+                logger.error("Printing failed")
                 self.root.after(0, self.ui.show_error, "Printing Failed")
                 return
 
-            # 4️⃣ Mark Order as Printed
+            logger.info("Printing successful")
+
+            # 5️⃣ MARK ORDER AS PRINTED
             self.backend.mark_as_printed(order_id)
+            logger.info(f"Order {order_id} marked as printed")
 
             self.root.after(0, self.ui.show_success, "Printing Complete!")
 
@@ -177,12 +166,7 @@ class AutoPrintMain:
 
         except Exception as e:
             logger.exception(f"Critical system error: {e}")
-            print(f"❌ System Error: {e}")
-            self.root.after(
-                0,
-                self.ui.show_error,
-                f"System Error: {str(e)}"
-            )
+            self.root.after(0, self.ui.show_error, "System Error")
 
     # ============================================================
     # RUN SYSTEM
@@ -191,8 +175,10 @@ class AutoPrintMain:
     def run(self):
         if self.reader.start():
             print("🚀 System Online. Waiting for input...")
+            logger.info("System started successfully")
         else:
             print("❌ Arduino not detected.")
+            logger.error("Arduino not detected")
             self.ui.show_error("Arduino Disconnected")
 
         self.root.mainloop()

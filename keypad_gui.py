@@ -252,20 +252,16 @@ class KeypadGUI:
             print_settings = order_data.get('printSettings', {})
             global_duplex = print_settings.get('doubleSide', False)
             
-            for item in downloaded_items:
-                file_path = item["path"]
-                file_settings = item.get("settings", {})
-                
-                # Combine global and per-file settings
-                final_settings = {
-                    "copies": file_settings.get('copies', 1),
-                    "color": file_settings.get('color', 'BW'),
-                    "duplex": global_duplex,
-                    "orientation": file_settings.get('orientation', 'PORTRAIT'),
-                }
-                
-                self.printer.print_job([item], final_settings)
+            print_success = self.printer.print_job(
+                downloaded_items, 
+                {"duplex": global_duplex}
+            )
             
+            if not print_success:
+                print("❌ PRINT JOBS FAILED\n")
+                self.root.after(0, lambda: self.show_error("Printing Failed. Check printer."))
+                return
+
             print("✅ PRINT JOBS COMPLETED\n")
             
             # Success!

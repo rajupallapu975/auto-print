@@ -26,7 +26,7 @@ from services.smart_printer import SmartPrinter
 class AutoPrintMain:
     def __init__(self):
         self.root = tk.Tk()
-
+       #Raju
         # 🔗 Backend API URL (Render Production URL)
         self.backend = BackendService(
             base_url="https://printer-backend-ch2e.onrender.com"
@@ -86,20 +86,18 @@ class AutoPrintMain:
 
             if not verify_res.get("success"):
                 error_msg = verify_res.get("error", "Invalid code")
-
                 logger.warning(f"Verification failed for code {code}: {error_msg}")
+                
+                # Show specific error or generic one
+                display_msg = "Invalid or Expired Code"
                 if error_msg == "IP_ERROR":
-                    self.root.after(
-                        0,
-                        self.ui.show_error,
-                        "Backend Connection Error"
-                    )
-                else:
-                    self.root.after(
-                        0,
-                        self.ui.show_error,
-                        "Invalid or Expired Code"
-                    )
+                    display_msg = "Backend Offline"
+                elif error_msg == "TIMEOUT":
+                    display_msg = "Connection Timeout"
+                elif "Unknown error" not in error_msg and len(error_msg) < 30:
+                    display_msg = error_msg # Show backend's specific rejection reason
+
+                self.root.after(0, self.ui.show_error, display_msg)
                 return
 
             order_id = verify_res.get("orderId")
@@ -151,26 +149,19 @@ class AutoPrintMain:
             print_settings = verify_res.get("printSettings", {})
             global_duplex = print_settings.get("doubleSide", False)
 
-            total_files = len(downloaded_items)
+            # Inform UI
+            self.root.after(0, self.ui.update_printing_status, 1, len(downloaded_items))
 
-            for i, item in enumerate(downloaded_items):
-                self.root.after(
-                    0,
-                    self.ui.update_printing_status,
-                    i + 1,
-                    total_files
-                )
+            # Submit all files as one job to let SmartPrinter handle it efficiently
+            print_success = self.printer.print_job(
+                downloaded_items, 
+                {"duplex": global_duplex}
+            )
 
-                final_settings = {
-                    "copies": item.get("settings", {}).get("copies", 1),
-                    "color": item.get("settings", {}).get("color", "BW"),
-                    "duplex": global_duplex,
-                    "orientation": item.get("settings", {}).get(
-                        "orientation", "PORTRAIT"
-                    ),
-                }
-
-                self.printer.print_job([item], final_settings)
+            if not print_success:
+                logger.error(f"Printing failed for order {order_id}")
+                self.root.after(0, self.ui.show_error, "Printing Failed")
+                return
 
             # 4️⃣ Mark Order as Printed
             self.backend.mark_as_printed(order_id)

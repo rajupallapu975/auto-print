@@ -45,15 +45,23 @@ class RealPrinter:
             print("❌ Printer not ready or not detected.")
             return False
 
-        for item in file_items:
+        total_to_print = len(file_items)
+        success_count = 0
+
+        for idx, item in enumerate(file_items):
             file_path = item if isinstance(item, str) else item.get("path")
             file_settings = {} if isinstance(item, str) else item.get("settings", {})
 
-            if not os.path.exists(file_path):
+            if not file_path or not os.path.exists(file_path):
                 print(f"❌ File not found: {file_path}")
                 continue
 
             success = False
+            
+            # Merge settings
+            job_settings = settings.copy() if settings else {}
+            if file_settings:
+                job_settings.update(file_settings)
 
             for attempt in range(self.max_retries + 1):
                 try:
@@ -63,33 +71,29 @@ class RealPrinter:
                     if self.printer_name:
                         cmd.extend(["-d", self.printer_name])
 
-                    # Copies
-                    copies = file_settings.get("copies", settings.get("copies", 1))
+                    # Copies (from merged settings)
+                    copies = job_settings.get("copies", 1)
                     cmd.extend(["-n", str(copies)])
 
                     # Color mode
-                    color_mode = file_settings.get("color", settings.get("color", "BW"))
-
+                    color_mode = job_settings.get("color", "BW")
                     if color_mode == "BW":
                         cmd.extend(["-o", "ColorModel=Gray"])
                     else:
                         cmd.extend(["-o", "ColorModel=RGB"])
 
                     # Duplex
-                    duplex = settings.get("duplex", False)
-                    if duplex:
+                    if job_settings.get("duplex", False):
                         cmd.extend(["-o", "sides=two-sided-long-edge"])
 
                     # Orientation
-                    orientation = file_settings.get("orientation", "PORTRAIT")
-                    if orientation == "LANDSCAPE":
+                    if job_settings.get("orientation") == "LANDSCAPE":
                         cmd.extend(["-o", "landscape"])
 
                     cmd.append(file_path)
 
-                    print(f"\n📄 Printing: {os.path.basename(file_path)}")
-                    print(f"🔧 Command: {' '.join(cmd)}")
-
+                    print(f"📄 Printing [{idx+1}/{total_to_print}]: {os.path.basename(file_path)}")
+                    
                     result = subprocess.run(
                         cmd,
                         capture_output=True,
@@ -98,24 +102,21 @@ class RealPrinter:
                     )
 
                     if result.returncode == 0:
-                        print(f"✅ Print submitted: {result.stdout.strip()}")
+                        print(f"   ✅ Submitted: {result.stdout.strip()}")
                         success = True
                         break
                     else:
-                        print(f"⚠️ Print attempt failed: {result.stderr}")
-                        time.sleep(2)
+                        print(f"   ⚠️ Failed: {result.stderr}")
+                        time.sleep(1)
 
-                except subprocess.TimeoutExpired:
-                    print("❌ Print command timed out.")
                 except Exception as e:
-                    print(f"❌ Print error: {e}")
+                    print(f"   ❌ Error: {e}")
 
-            if not success:
-                print("❌ Failed to print after retries.")
-                return False
+            if success:
+                success_count += 1
 
         print("\n" + "=" * 50)
-        print("✅ ALL PRINT JOBS COMPLETED")
+        print(f"✨ {success_count}/{total_to_print} jobs submitted successfully")
         print("=" * 50 + "\n")
 
-        return True
+        return success_count == total_to_print

@@ -30,19 +30,31 @@ class FirebaseService:
 
     def get_order_by_pickup_code(self, pickup_code):
         try:
-            print(f"🔍 Searching for pickup code: {pickup_code}")
+            code_str = str(pickup_code).strip()
+            print(f"🔍 Searching for pickup code: {code_str}")
 
+            # 1. Try searching by String
             query = (
                 self.db.collection("orders")
-                .where(filter=FieldFilter("pickupCode", "==", str(pickup_code)))
+                .where(filter=FieldFilter("pickupCode", "==", code_str))
                 .limit(1)
                 .stream()
             )
-
             docs = list(query)
 
+            # 2. If not found and numeric, try searching by Integer
+            if not docs and code_str.isdigit():
+                print(f"   ℹ️ Not found as string, trying as integer...")
+                query = (
+                    self.db.collection("orders")
+                    .where(filter=FieldFilter("pickupCode", "==", int(code_str)))
+                    .limit(1)
+                    .stream()
+                )
+                docs = list(query)
+
             if not docs:
-                print("❌ No order found")
+                print(f"❌ No order found matching [{code_str}]")
                 return {"success": False, "error": "ORDER_NOT_FOUND"}
 
             doc = docs[0]

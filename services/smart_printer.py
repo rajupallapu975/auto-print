@@ -21,29 +21,36 @@ class SmartPrinter:
 
         if self.os_type == "Windows":
             try:
-                ps_cmd = (
-                    "Get-WmiObject -Class Win32_Printer | "
-                    "Where-Object {$_.Default -eq $true} | "
-                    "Select-Object -ExpandProperty Name"
-                )
+                # Optimized PowerShell command to get printer status
+                ps_cmd = "Get-Printer | Select-Object Name, PrinterStatus, JobCount, IsDefault"
+                if self.printer_name:
+                    ps_cmd = f"Get-Printer -Name '{self.printer_name}' | Select-Object Name, PrinterStatus, JobCount"
 
                 result = subprocess.run(
                     ["powershell", "-Command", ps_cmd],
                     capture_output=True,
                     text=True,
-                    timeout=5
+                    timeout=5,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
 
-                if result.stdout.strip():
-                    return True, result.stdout.strip()
+                if result.returncode == 0 and result.stdout.strip():
+                    return True, f"Found: {result.stdout.strip().splitlines()[0]}"
+                
+                # Fallback: Just check if any printer exists
+                fallback = subprocess.run(
+                    ["powershell", "-Command", "Get-Printer | Select-Object -ExpandProperty Name"],
+                    capture_output=True, text=True
+                )
+                if fallback.stdout.strip():
+                    return True, "Printer(s) detected"
 
-                logger.warning("No default printer found on Windows")
-                return False, "No default printer"
+                return False, "No printer found"
 
             except Exception as e:
                 logger.error(f"Windows printer check failed: {e}")
                 return False, str(e)
-
+        
         elif self.os_type == "Linux":
             try:
                 result = subprocess.run(
@@ -54,13 +61,13 @@ class SmartPrinter:
                 )
 
                 if result.returncode == 0 and "printer" in result.stdout.lower():
+                    # If specific printer requested, check it
+                    if self.printer_name and self.printer_name not in result.stdout:
+                        return False, f"Printer '{self.printer_name}' not in CuPS"
                     return True, "CUPS printer detected"
 
-                logger.warning("No CUPS printer found on Linux")
                 return False, "No CUPS printer found"
-
             except Exception as e:
-                logger.error(f"Linux printer check failed: {e}")
                 return False, str(e)
 
         return False, "Unsupported OS"
@@ -71,7 +78,7 @@ class SmartPrinter:
 
     def print_job(self, file_paths, settings):
         print("\n" + "=" * 50)
-        print(f"🖨️ PRINTING ON {self.os_type.upper()}")
+        print(f"🖨️  PRINTING ON {self.os_type.upper()}")
         print("=" * 50)
 
         available, message = self.check_printer_available()
@@ -80,19 +87,27 @@ class SmartPrinter:
             return False
 
         success_count = 0
+        total_to_print = len(file_paths)
 
-        for item in file_paths:
+        for idx, item in enumerate(file_paths):
             file_path = item if isinstance(item, str) else item.get("path")
             file_settings = {} if isinstance(item, str) else item.get("settings", {})
+            
+            # Merge settings
+            job_settings = settings.copy() if settings else {}
+            if file_settings:
+                job_settings.update(file_settings)
 
-            if not os.path.exists(file_path):
+            if not file_path or not os.path.exists(file_path):
                 print(f"❌ File not found: {file_path}")
                 continue
 
+            print(f"📄 Processing [{idx+1}/{total_to_print}]: {os.path.basename(file_path)}")
+
             if self.os_type == "Windows":
-                result = self._print_windows(file_path, file_settings, settings)
+                result = self._print_windows(file_path, job_settings)
             elif self.os_type == "Linux":
-                result = self._print_linux(file_path, file_settings, settings)
+                result = self._print_linux(file_path, job_settings)
             else:
                 print("⚠️ Unsupported OS")
                 result = False
@@ -100,28 +115,37 @@ class SmartPrinter:
             if result:
                 success_count += 1
 
-        print(f"\n✅ {success_count}/{len(file_paths)} printed\n")
-        return success_count > 0
+        print(f"\n✨ {success_count}/{total_to_print} jobs submitted successfully\n")
+        return success_count == total_to_print
 
     # ==========================================================
     # WINDOWS PRINT
     # ==========================================================
 
-    def _print_windows(self, file_path, file_settings, settings):
+    def _print_windows(self, file_path, settings):
         try:
             abs_path = os.path.abspath(file_path)
-            copies = file_settings.get("copies", settings.get("copies", 1))
+            copies = settings.get("copies", 1)
+            
+            # For Windows, we use Start-Process with the Print verb
+            # If a printer_name is specified, we try to use it
+            if self.printer_name:
+                print(f"   🎯 Target Printer: {self.printer_name}")
+                # We can't directly specify printer name with 'Print' verb reliably across apps,
+                # so we try the 'PrintTo' verb which is supported by many PDF viewers
+                ps_command = f'Start-Process -FilePath "{abs_path}" -Verb PrintTo -ArgumentList "{self.printer_name}" -Wait'
+            else:
+                ps_command = f'Start-Process -FilePath "{abs_path}" -Verb Print -Wait'
 
-            ps_command = f'Start-Process -FilePath "{abs_path}" -Verb Print -Wait'
-
-            for _ in range(copies):
+            for c in range(int(copies)):
+                print(f"   📤 Submitting copy {c+1}...")
                 subprocess.run(
                     ["powershell", "-Command", ps_command],
                     capture_output=True,
-                    timeout=30
+                    timeout=45,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
                 )
 
-            print("✅ Windows print submitted")
             return True
 
         except Exception as e:
@@ -132,17 +156,17 @@ class SmartPrinter:
     # LINUX PRINT (RASPBERRY PI)
     # ==========================================================
 
-    def _print_linux(self, file_path, file_settings, settings):
+    def _print_linux(self, file_path, settings):
         try:
             cmd = ["lp"]
 
             if self.printer_name:
                 cmd.extend(["-d", self.printer_name])
 
-            copies = file_settings.get("copies", settings.get("copies", 1))
+            copies = settings.get("copies", 1)
             cmd.extend(["-n", str(copies)])
 
-            color_mode = file_settings.get("color", settings.get("color", "BW"))
+            color_mode = settings.get("color", "BW")
             if color_mode == "BW":
                 cmd.extend(["-o", "ColorModel=Gray"])
             else:
@@ -151,7 +175,7 @@ class SmartPrinter:
             if settings.get("duplex", False):
                 cmd.extend(["-o", "sides=two-sided-long-edge"])
 
-            if file_settings.get("orientation") == "LANDSCAPE":
+            if settings.get("orientation") == "LANDSCAPE":
                 cmd.extend(["-o", "landscape"])
 
             cmd.append(file_path)

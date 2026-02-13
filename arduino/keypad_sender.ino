@@ -34,13 +34,17 @@ void loop() {
   char key = keypad.getKey();
 
   if (key) {
-    // Only send digits 0-9 to the Raspberry Pi for the pickup code
-    if (key >= '0' && key <= '9') {
+    // Send all numeric and alphabet keys (A-D, 0-9)
+    if ((key >= '0' && key <= '9') || (key >= 'A' && key <= 'D')) {
       Serial.println(key); 
     }
-    // Optional: Use '#' as a clear button
+    // Use '#' as Clear
     else if (key == '#') {
       Serial.println("CLEAR");
+    }
+    // Use '*' as Backspace
+    else if (key == '*') {
+      Serial.println("BACKSPACE");
     }
   }
 }

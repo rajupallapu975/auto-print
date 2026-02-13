@@ -17,7 +17,7 @@ class KeypadGUI:
         # self.root.attributes('-topmost', True)
         
         # Initialize services
-        self.BACKEND_BASE_URL = "http://localhost:5000"
+        self.BACKEND_BASE_URL = "https://printer-backend-ch2e.onrender.com"
         self.PRINTER_NAME = None
         
         self.fb_service = FirebaseService()
@@ -211,25 +211,27 @@ class KeypadGUI:
     def process_order(self, pickup_code):
         """Process the order in background thread"""
         try:
-            # 1️⃣ Get order using pickup code (Firestore)
+            # 1️⃣ Verify Code with Backend
             print(f"\n{'='*40}")
-            print(f"🔍 Looking up order with code: {pickup_code}")
+            print(f"🔍 Verifying code: {pickup_code}")
             print(f"{'='*40}\n")
             
-            order_res = self.fb_service.get_order_by_pickup_code(pickup_code)
-            if not order_res.get("success"):
-                error_msg = order_res.get("error")
+            verify_res = self.backend.verify_code(pickup_code)
+            
+            if not verify_res.get("success"):
+                error_msg = verify_res.get("error", "Invalid Code")
                 display_error = "Order not found!"
-                if error_msg == "FIREBASE_ERROR":
-                    display_error = "Firebase Sync Error"
+                
+                if error_msg == "IP_ERROR": display_error = "Backend Offline"
+                elif error_msg == "TIMEOUT": display_error = "Connection Timeout"
+                elif "Order not printable" in error_msg: display_error = "Order not printable"
+                elif len(error_msg) < 30: display_error = error_msg
+                
                 self.root.after(0, lambda: self.show_error(display_error))
                 return
             
-            order_data = order_res
-            order_id = order_data.get("id")
-            
-            # 2️⃣ Download files using Order ID (Node backend)
-            download_res = self.backend.download_files(order_data)
+            # 2️⃣ Download files
+            download_res = self.backend.download_files(verify_res)
             if not download_res.get("success"):
                 error_type = download_res.get("error")
                 display_error = "Download Failed"

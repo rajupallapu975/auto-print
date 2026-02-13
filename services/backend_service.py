@@ -46,6 +46,16 @@ class BackendService:
                     timeout=15
                 )
 
+                if res.status_code == 400:
+                    try:
+                        data = res.json()
+                        error_msg = data.get("message") or data.get("error") or "Order not printable"
+                        print(f"⚠️ Backend rejected (400): {error_msg}")
+                        return {"success": False, "error": error_msg}
+                    except ValueError:
+                        print("⚠️ Backend returned 400 but no JSON")
+                        return {"success": False, "error": "Invalid Request"}
+
                 if res.status_code == 403:
                     print("❌ Auth Error: Check your x-printer-key")
                     return {"success": False, "error": "AUTH_ERROR"}

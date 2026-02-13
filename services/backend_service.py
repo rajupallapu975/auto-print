@@ -94,7 +94,9 @@ class BackendService:
                 time.sleep(2)
 
             except Exception as e:
-                print(f"❌ Unexpected error in verify_code: {e}")
+                print(f"❌ Unexpected error in verify_code: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
                 return {"success": False, "error": "SYSTEM_ERROR", "details": str(e)}
 
         return {"success": False, "error": "IP_ERROR"}

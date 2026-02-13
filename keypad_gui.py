@@ -4,7 +4,7 @@ from firebase_service import FirebaseService
 from backend_service import BackendService
 from smart_printer import SmartPrinter
 import threading
-
+# raju
 
 class KeypadGUI:
     def __init__(self, root):
@@ -230,6 +230,8 @@ class KeypadGUI:
                 self.root.after(0, lambda: self.show_error(display_error))
                 return
             
+            order_id = verify_res.get("orderId")
+
             # 2️⃣ Download files
             download_res = self.backend.download_files(verify_res)
             if not download_res.get("success"):
@@ -251,7 +253,7 @@ class KeypadGUI:
             print(f"\n📑 Preparing {len(downloaded_items)} files for printing...\n")
             
             # Get global settings from order
-            print_settings = order_data.get('printSettings', {})
+            print_settings = verify_res.get('printSettings', {})
             global_duplex = print_settings.get('doubleSide', False)
             
             print_success = self.printer.print_job(

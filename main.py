@@ -185,8 +185,8 @@ class AutoPrintMain:
             # ================================================================
             self.root.after(
                 0,
-                self.ui.show_status,
-                f"Printing {len(files)} files..."
+                self.ui.show_success,
+                "Printing in progress..."
             )
             
             print_settings = verify_res.get("printSettings", {})
@@ -210,7 +210,7 @@ class AutoPrintMain:
             self.backend.mark_as_printed(order_id)
             logger.info(f"Order {order_id} marked as printed")
             
-            self.root.after(0, self.ui.show_success, "Printing Complete!")
+            self.root.after(0, self.ui.show_success, "Printed Successfully!")
             
             # Reset UI after 5 seconds
             self.root.after(

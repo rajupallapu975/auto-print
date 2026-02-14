@@ -450,7 +450,7 @@ class AutoPrintApp:
                 return
             
             # Step 3: Print (Directly after download)
-            self.gui.show_success(f"Printing {len(files)} file(s)...")
+            self.gui.show_success("Printing in progress...")
             print_settings = verify_res.get("printSettings", {})
             
             success = self.printer.print_job(
@@ -466,7 +466,7 @@ class AutoPrintApp:
             self.backend.mark_as_printed(order_id)
             logger.info(f"Order {order_id} completed")
             
-            self.gui.show_success("Complete!")
+            self.gui.show_success("Printed Successfully!")
             self.root.after(5000, self.gui.reset_ui)
             
         except Exception as e:

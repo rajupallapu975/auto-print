@@ -35,7 +35,9 @@ class SmartPrinter:
                 )
 
                 if result.returncode == 0 and result.stdout.strip():
-                    return True, f"Found: {result.stdout.strip().splitlines()[0]}"
+                    status_info = result.stdout.strip().splitlines()[0]
+                    print(f"✅ PRINTER CONNECTED: {status_info}")
+                    return True, f"Found: {status_info}"
                 
                 # Fallback: Just check if any printer exists
                 fallback = subprocess.run(
@@ -43,8 +45,10 @@ class SmartPrinter:
                     capture_output=True, text=True
                 )
                 if fallback.stdout.strip():
+                    print("✅ PRINTER CONNECTED: Printer(s) detected")
                     return True, "Printer(s) detected"
 
+                print("❌ PRINTER NOT CONNECTED: No printer found")
                 return False, "No printer found"
 
             except Exception as e:
@@ -63,9 +67,12 @@ class SmartPrinter:
                 if result.returncode == 0 and "printer" in result.stdout.lower():
                     # If specific printer requested, check it
                     if self.printer_name and self.printer_name not in result.stdout:
-                        return False, f"Printer '{self.printer_name}' not in CuPS"
+                        print(f"❌ PRINTER NOT CONNECTED: '{self.printer_name}' not in CUPS")
+                        return False, f"Printer '{self.printer_name}' not in CUPS"
+                    print("✅ PRINTER CONNECTED: CUPS printer detected")
                     return True, "CUPS printer detected"
 
+                print("❌ PRINTER NOT CONNECTED: No CUPS printer found")
                 return False, "No CUPS printer found"
             except Exception as e:
                 return False, str(e)
@@ -115,7 +122,11 @@ class SmartPrinter:
             if result:
                 success_count += 1
 
-        print(f"\n✨ {success_count}/{total_to_print} jobs submitted successfully\n")
+        if success_count == total_to_print:
+            print(f"\n✅ ALL {success_count} JOBS PRINTED SUCCESSFULLY")
+        else:
+            print(f"\n⚠️ {success_count}/{total_to_print} jobs submitted. Some might have failed.")
+            
         return success_count == total_to_print
 
     # ==========================================================

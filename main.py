@@ -181,19 +181,7 @@ class AutoPrintMain:
             logger.info(f"{len(files)} files downloaded")
             
             # ================================================================
-            # STEP 3: CHECK PRINTER STATUS
-            # ================================================================
-            printer_status, printer_msg = self.printer.check_printer_available()
-            
-            if not printer_status:
-                logger.error(f"Printer error: {printer_msg}")
-                self.root.after(0, self.ui.show_error, "Printer Not Found")
-                return
-            
-            logger.info(f"Printer ready: {printer_msg}")
-            
-            # ================================================================
-            # STEP 4: PRINT FILES
+            # STEP 3: PRINT FILES (Directly after download)
             # ================================================================
             self.root.after(
                 0,
@@ -210,7 +198,7 @@ class AutoPrintMain:
             )
             
             if not print_success:
-                logger.error("Printing failed")
+                logger.error("Printing failed or printer unavailable")
                 self.root.after(0, self.ui.show_error, "Printing Failed")
                 return
             

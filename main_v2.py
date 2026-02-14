@@ -97,13 +97,7 @@ class AutoPrintSystem:
                 self._show_error("No Files Found")
                 return
             
-            # Step 3: Check Printer
-            printer_ok, printer_msg = self.printer.check_printer_available()
-            if not printer_ok:
-                self._show_error("Printer Not Found")
-                return
-            
-            # Step 4: Print
+            # Step 3: Print (Directly after download)
             self._show_status(f"Printing {len(files)} files...")
             print_settings = verify_res.get("printSettings", {})
             
@@ -113,10 +107,11 @@ class AutoPrintSystem:
             )
             
             if not success:
-                self._show_error("Printing Failed")
+                self._show_error("Printing Failed or Printer Unavailable")
                 return
             
-            # Step 5: Mark Complete
+            logger.info("Printing successful")
+            # Step 4: Mark Complete
             self.backend.mark_as_printed(order_id)
             logger.info(f"Order {order_id} completed")
             

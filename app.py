@@ -207,8 +207,11 @@ class PrinterService:
     
     def check_printer_available(self):
         """Check if printer is ready"""
+        print("🔍 Checking printer status...")
         if not self.printer_name:
+            print("❌ PRINTER NOT CONNECTED: No printer found")
             return False, "No printer found"
+        print(f"✅ PRINTER CONNECTED: {self.printer_name}")
         return True, self.printer_name
     
     def print_job(self, files, settings):
@@ -240,6 +243,7 @@ class PrinterService:
                 logger.error(f"Print failed: {e}")
                 return False
         
+        print(f"\n✅ ALL {len(files)} JOBS PRINTED SUCCESSFULLY")
         return True
 
 # ============================================================================
@@ -445,13 +449,7 @@ class AutoPrintApp:
                 self.gui.show_error("No Files")
                 return
             
-            # Step 3: Check Printer
-            printer_ok, printer_msg = self.printer.check_printer_available()
-            if not printer_ok:
-                self.gui.show_error("Printer Not Found")
-                return
-            
-            # Step 4: Print
+            # Step 3: Print (Directly after download)
             self.gui.show_success(f"Printing {len(files)} file(s)...")
             print_settings = verify_res.get("printSettings", {})
             
@@ -461,10 +459,10 @@ class AutoPrintApp:
             )
             
             if not success:
-                self.gui.show_error("Printing Failed")
+                self.gui.show_error("Printing Failed or Printer Unavailable")
                 return
             
-            # Step 5: Mark Complete
+            # Step 4: Mark Complete
             self.backend.mark_as_printed(order_id)
             logger.info(f"Order {order_id} completed")
             

@@ -27,7 +27,7 @@ class BackendService:
     
     def __init__(
         self,
-        base_url="https://printer-backend-ch2e.onrender.com",
+        base_url="http://10.0.53.78:5000",
         base_dir="temp_jobs",
         printer_key="LOCAL_PRINTER",
         max_retries=2

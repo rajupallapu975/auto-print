@@ -63,8 +63,8 @@ class AutoPrintUI:
         tk.Label(self.root, text="Press 'Esc' to exit kiosk mode", font=("Helvetica", 10), 
                  fg="#475569", bg="#0f172a").place(relx=0.02, rely=0.95)
 
-        # Bind Escape key
-        self.root.bind("<Escape>", lambda e: self.root.attributes("-fullscreen", False))
+        # Bind Escape key to completely exit the app
+        self.root.bind("<Escape>", lambda e: self.root.quit())
 
     def handle_key_input(self, char):
         """Update code display when a key is pressed to the physical keypad."""

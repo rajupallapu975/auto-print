@@ -1,8 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox, font
-from firebase_service import FirebaseService
-from backend_service import BackendService
-from smart_printer import SmartPrinter
+from services.backend_service import BackendService
+from services.smart_printer import SmartPrinter
 import threading
 # raju
 
@@ -17,10 +16,9 @@ class KeypadGUI:
         # self.root.attributes('-topmost', True)
         
         # Initialize services
-        self.BACKEND_BASE_URL = "https://printer-backend-ch2e.onrender.com"
+        self.BACKEND_BASE_URL = "http://10.0.53.78:5000"
         self.PRINTER_NAME = None
         
-        self.fb_service = FirebaseService()
         self.backend = BackendService(base_url=self.BACKEND_BASE_URL)
         self.printer = SmartPrinter(printer_name=self.PRINTER_NAME)
         

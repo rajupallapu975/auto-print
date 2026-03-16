@@ -27,7 +27,7 @@ import platform
 # CONFIGURATION
 # ============================================================================
 CONFIG = {
-    'BACKEND_URL': 'https://printer-backend-ch2e.onrender.com',
+    'BACKEND_URL': 'http://10.0.53.78:5000',
     'PRINTER_KEY': 'LOCAL_PRINTER',
     'ARDUINO_PORT': 'COM19' if sys.platform.startswith('win') else None,
     'TEMP_DIR': 'temp_jobs',
@@ -50,28 +50,33 @@ logger = logging.getLogger(__name__)
 # BACKEND SERVICE
 # ============================================================================
 class BackendService:
-    """Handles all backend API communication"""
+    """Handles all backend API communication using a persistent session"""
     
     def __init__(self):
         self.base_url = CONFIG['BACKEND_URL']
-        self.printer_key = CONFIG['PRINTER_KEY']
         self.temp_dir = CONFIG['TEMP_DIR']
         os.makedirs(self.temp_dir, exist_ok=True)
+        
+        # Initialize persistent session for efficiency (reuses TCP connections)
+        self.session = requests.Session()
+        self.session.headers.update({
+            "x-printer-key": CONFIG['PRINTER_KEY'],
+            "Content-Type": "application/json"
+        })
     
     def verify_code(self, code):
         """Verify pickup code with backend"""
         url = f"{self.base_url}/verify-pickup-code"
-        headers = {"x-printer-key": self.printer_key}
         code = str(code).strip()
         
         print(f"📡 Verifying: {code}")
         
         for attempt in range(CONFIG['MAX_RETRIES'] + 1):
             try:
-                res = requests.post(
+                # Note: Content-Type is in session headers
+                res = self.session.post(
                     url,
                     json={"pickupCode": code},
-                    headers=headers,
                     timeout=CONFIG['TIMEOUT']
                 )
                 
@@ -119,13 +124,14 @@ class BackendService:
         downloaded = []
         print(f"📥 Downloading {len(file_urls)} file(s)...")
         
+        # We use a separate session or just the existing one without the printer headers for downloading
         for idx, url in enumerate(file_urls):
-            if not url:
-                continue
+            if not url: continue
             
             try:
                 local_path = os.path.join(job_dir, f"file_{idx}.pdf")
-                r = requests.get(url, timeout=30)
+                # Remove session default headers for external Cloudinary calls
+                r = self.session.get(url, timeout=30, headers={}) 
                 r.raise_for_status()
                 
                 content = r.content
@@ -133,13 +139,11 @@ class BackendService:
                 is_image = "image" in content_type or url.lower().endswith((".jpg", ".jpeg", ".png"))
                 
                 if is_image:
-                    # Convert image to PDF
                     image = Image.open(io.BytesIO(content))
                     if image.mode in ("RGBA", "P"):
                         image = image.convert("RGB")
                     image.save(local_path, "PDF", resolution=100.0)
                 else:
-                    # Save PDF directly
                     with open(local_path, "wb") as f:
                         f.write(content)
                 
@@ -147,7 +151,7 @@ class BackendService:
                 print(f"   ✅ [{idx+1}/{len(file_urls)}] Downloaded")
                 
             except Exception as e:
-                logger.error(f"Download failed: {e}")
+                logger.error(f"Download failed for {url}: {e}")
         
         if not downloaded:
             return {"success": False, "error": "DOWNLOAD_ERROR"}
@@ -158,24 +162,24 @@ class BackendService:
     def mark_as_printed(self, order_id):
         """Mark order as printed and cleanup"""
         url = f"{self.base_url}/mark-printed"
-        headers = {"x-printer-key": self.printer_key}
         
         try:
-            res = requests.post(
+            res = self.session.post(
                 url,
                 json={"orderId": order_id},
-                headers=headers,
                 timeout=10
             )
             
             if res.status_code == 200:
                 print(f"✅ Marked as printed")
-                # Cleanup
+                # Cleanup local temp files
                 job_dir = os.path.join(self.temp_dir, order_id)
                 if os.path.exists(job_dir):
                     shutil.rmtree(job_dir)
+                    print(f"🧹 Cleaned up temporary files for {order_id}")
         except Exception as e:
             logger.error(f"Mark printed failed: {e}")
+
 
 # ============================================================================
 # PRINTER SERVICE

@@ -8,7 +8,7 @@ import sys
 # ============================================================
 # BACKEND CONFIGURATION
 # ============================================================
-BACKEND_URL = "https://printer-backend-ch2e.onrender.com"
+BACKEND_URL = "http://10.0.53.78:5000"
 PRINTER_KEY = "LOCAL_PRINTER"
 
 # ============================================================

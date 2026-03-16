@@ -53,7 +53,7 @@ class AutoPrintMain:
         # INITIALIZE BACKEND SERVICE
         # ====================================================================
         self.backend = BackendService(
-            base_url="https://printer-backend-ch2e.onrender.com"
+            base_url="http://10.0.53.78:5000"
         )
         
         # ====================================================================

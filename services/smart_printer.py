@@ -138,24 +138,21 @@ class SmartPrinter:
             abs_path = os.path.abspath(file_path)
             copies = settings.get("copies", 1)
             
-            # For Windows, we use Start-Process with the Print verb
-            # If a printer_name is specified, we try to use it
-            if self.printer_name:
-                print(f"   🎯 Target Printer: {self.printer_name}")
-                # We can't directly specify printer name with 'Print' verb reliably across apps,
-                # so we try the 'PrintTo' verb which is supported by many PDF viewers
-                ps_command = f'Start-Process -FilePath "{abs_path}" -Verb PrintTo -ArgumentList "{self.printer_name}" -Wait'
-            else:
-                ps_command = f'Start-Process -FilePath "{abs_path}" -Verb Print -Wait'
-
             for c in range(int(copies)):
                 print(f"   📤 Submitting copy {c+1}...")
-                subprocess.run(
-                    ["powershell", "-Command", ps_command],
-                    capture_output=True,
-                    timeout=45,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-                )
+                
+                # The safest and most reliable way to trigger Windows printing from Python
+                if hasattr(os, 'startfile'):
+                    try:
+                        os.startfile(abs_path, "print")
+                        # Give the Windows Spooler 3 seconds to fully receive the file 
+                        # before moving on, avoiding background job cancellation
+                        time.sleep(3)
+                    except Exception as e:
+                        print(f"   ⚠️ Fallback to powershell due to: {e}")
+                        ps_cmd = f'Start-Process -FilePath "{abs_path}" -Verb Print'
+                        subprocess.run(["powershell", "-Command", ps_cmd], 
+                                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
             return True
 

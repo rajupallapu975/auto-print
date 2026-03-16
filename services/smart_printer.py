@@ -69,8 +69,22 @@ class SmartPrinter:
                     if self.printer_name and self.printer_name not in result.stdout:
                         print(f"❌ PRINTER NOT CONNECTED: '{self.printer_name}' not in CUPS")
                         return False, f"Printer '{self.printer_name}' not in CUPS"
-                    print("✅ PRINTER CONNECTED: CUPS printer detected")
-                    return True, "CUPS printer detected"
+                    
+                    # If no specific printer is set, find one automatically to avoid 'No default destination' error
+                    if not self.printer_name:
+                        # 1. Try to get system default
+                        def_result = subprocess.run(["lpstat", "-d"], capture_output=True, text=True)
+                        if "system default destination: " in def_result.stdout:
+                            self.printer_name = def_result.stdout.split("system default destination: ")[1].strip()
+                        else:
+                            # 2. Grab the first available printer from lpstat -p
+                            for line in result.stdout.splitlines():
+                                if line.startswith("printer "):
+                                    self.printer_name = line.split(" ")[1]
+                                    break
+                    
+                    print(f"✅ PRINTER CONNECTED: CUPS printer detected ({self.printer_name})")
+                    return True, f"CUPS printer: {self.printer_name}"
 
                 print("❌ PRINTER NOT CONNECTED: No CUPS printer found")
                 return False, "No CUPS printer found"
